@@ -76,61 +76,60 @@ export default function Index() {
     getTodos();
   }, []);
 
-  const addTodo = async () => {
-    try {
-      const newTodo = {
-        id: Math.random(),
-        title: todoText,
-        isDone: false,
-      };
-      todos.push(newTodo);
-      setTodos(todos);
-      setOldTodos(todos);
-      await AsyncStorage.setItem("my-todo", JSON.stringify(todos));
-      setTodoText("");
-      Keyboard.dismiss();
-    } catch (error) {
-      console.log(error);
-    }
+const addTodo = async () => {
+  const newTodo = {
+    id: Math.random(),
+    title: todoText,
+    isDone: false,
   };
 
-  const deleteTodo = async (id: number) => {
-    try {
-      const newTodos = todos.filter((todo) => todo.id !== id);
-      await AsyncStorage.setItem("my-todo", JSON.stringify(newTodos));
-      setTodos(newTodos);
-      setOldTodos(newTodos);
-    } catch (error) {
-      console.log(error);
-    }
-  };
+  const newTodos = [...oldTodos, newTodo];
 
-  const handleDone = async (id: number) => {
-    try {
-      const newTodos = todos.map((todo) => {
-        if (todo.id === id) {
-          todo.isDone = !todo.isDone;
-        }
-        return todo;
-      });
-      await AsyncStorage.setItem("my-todo", JSON.stringify(newTodos));
-      setTodos(newTodos);
-      setOldTodos(newTodos);
-    } catch (error) {
-      console.log(error);
-    }
-  };
+  setOldTodos(newTodos);
+  setTodos(newTodos);
+  await AsyncStorage.setItem("my-todo", JSON.stringify(newTodos));
 
-  const onSearch = (query: string) => {
-    if (query == "") {
-      setTodos(oldTodos);
-    } else {
-      const filteredTodos = todos.filter((todo) =>
-        todo.title.toLowerCase().includes(query.toLowerCase())
-      );
-      setTodos(filteredTodos);
-    }
-  };
+  setTodoText("");
+  Keyboard.dismiss();
+};
+
+
+ const deleteTodo = async (id: number) => {
+  try {
+    const newTodos = oldTodos.filter((todo) => todo.id !== id);
+
+    setOldTodos(newTodos);
+    setTodos(newTodos); // reset lại list đang hiển thị
+
+    await AsyncStorage.setItem("my-todo", JSON.stringify(newTodos));
+  } catch (error) {
+    console.log(error);
+  }
+};
+
+
+ const handleDone = async (id: number) => {
+  const newTodos = oldTodos.map(todo =>
+    todo.id === id ? { ...todo, isDone: !todo.isDone } : todo
+  );
+
+  setOldTodos(newTodos);
+  setTodos(newTodos);
+  await AsyncStorage.setItem("my-todo", JSON.stringify(newTodos));
+};
+
+
+const onSearch = (query: string) => {
+  if (query == "") {
+    setTodos(oldTodos);
+  } else {
+    const filteredTodos = oldTodos.filter((todo) =>
+      todo.title.toLowerCase().includes(query.toLowerCase())
+    );
+    setTodos(filteredTodos);
+  }
+};
+
 
   useEffect(() => {
     onSearch(searchQuery);
