@@ -13,10 +13,11 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { Checkbox } from "expo-checkbox";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { Picker } from "@react-native-picker/picker";
+import Toast from "react-native-toast-message";
 
-// Define the data type for a todo item
 type ToDoType = {
   id: number;
   title: string;
@@ -24,269 +25,225 @@ type ToDoType = {
 };
 
 export default function Index() {
-  // Sample data (not used directly, just for reference)
-  const todoData = [
-    {
-      id: 1,
-      title: "Todo 1",
-      isDone: false,
-    },
-    {
-      id: 2,
-      title: "Todo 2",
-      isDone: false,
-    },
-    {
-      id: 3,
-      title: "Todo 3",
-      isDone: false,
-    },
-    {
-      id: 4,
-      title: "Todo 4",
-      isDone: true,
-    },
-    {
-      id: 5,
-      title: "Todo 5",
-      isDone: false,
-    },
-    {
-      id: 6,
-      title: "Todo 6",
-      isDone: false,
-    },
-  ];
-
-  // State to manage the list of displayed todos
   const [todos, setTodos] = useState<ToDoType[]>([]);
-  // State for the text input when adding a todo
   const [todoText, setTodoText] = useState<string>("");
-  // State for the search query
   const [searchQuery, setSearchQuery] = useState<string>("");
-  // State for the original list of todos (to restore when searching)
-  const [oldTodos, setOldTodos] = useState<ToDoType[]>([]);
-  // State for editing: ID of the todo being edited
+  const [filter, setFilter] = useState<"all" | "done" | "undone">("all");
   const [editingId, setEditingId] = useState<number | null>(null);
-  // State for the edit text
   const [editText, setEditText] = useState<string>("");
 
-  // useEffect to load data from AsyncStorage when component mounts
+  // Load todos from AsyncStorage
   useEffect(() => {
-    const getTodos = async () => {
+    const loadTodos = async () => {
       try {
-        const storedTodos = await AsyncStorage.getItem("my-todo");
-        if (storedTodos !== null) {
-          const parsedTodos = JSON.parse(storedTodos);
-          setTodos(parsedTodos);
-          setOldTodos(parsedTodos);
-        }
+        const stored = await AsyncStorage.getItem("my-todo");
+        if (stored) setTodos(JSON.parse(stored));
       } catch (error) {
-        console.log("Error loading todos:", error);
+        console.error("Error loading todos:", error);
       }
     };
-    getTodos();
+    loadTodos();
   }, []);
 
-  // Function to add a new todo
-  const addTodo = async () => {
-    // Check if text is empty, do not add
-    if (todoText.trim() === "") {
+  const saveTodos = useCallback(async (newTodos: ToDoType[]) => {
+    try {
+      await AsyncStorage.setItem("my-todo", JSON.stringify(newTodos));
+    } catch (error) {
+      console.error("Error saving todos:", error);
+    }
+  }, []);
+
+  const addTodo = useCallback(async () => {
+    if (!todoText.trim()) {
       alert("Please enter todo content!");
       return;
     }
-
-    // Create a new todo with a unique ID (use Date.now() instead of Math.random() to avoid duplicates)
     const newTodo: ToDoType = {
-      id: Date.now(), // ID based on timestamp, ensures uniqueness
+      id: Date.now(),
       title: todoText.trim(),
       isDone: false,
     };
-
-    // Update the list
-    const newTodos = [...oldTodos, newTodo];
-    setOldTodos(newTodos);
-    setTodos(newTodos);
-
-    // Save to AsyncStorage
-    try {
-      await AsyncStorage.setItem("my-todo", JSON.stringify(newTodos));
-    } catch (error) {
-      console.log("Error saving todo:", error);
-    }
-
-    // Reset input and hide keyboard
+    const updatedTodos = [newTodo, ...todos];
+    setTodos(updatedTodos);
+    await saveTodos(updatedTodos);
     setTodoText("");
     Keyboard.dismiss();
-  };
+  }, [todoText, todos, saveTodos]);
 
-  // Function to delete todo by ID
-  const deleteTodo = async (id: number) => {
-    try {
-      const newTodos = oldTodos.filter((todo) => todo.id !== id);
-      setOldTodos(newTodos);
-      setTodos(newTodos); // Update the displayed list
-      await AsyncStorage.setItem("my-todo", JSON.stringify(newTodos));
-      alert("Todo deleted!");
-    } catch (error) {
-      console.log("Error deleting todo:", error);
-    }
-  };
+  const deleteTodo = useCallback(
+    async (id: number) => {
+      const updatedTodos = todos.filter((todo) => todo.id !== id);
+      setTodos(updatedTodos);
+      await saveTodos(updatedTodos);
+      Toast.show({
+        type: "success",
+        text1: "Todo deleted!",
+        visibilityTime: 2000,
+      });
+    },
+    [todos, saveTodos]
+  );
 
-  // Function to mark as done/not done
-  const handleDone = async (id: number) => {
-    const newTodos = oldTodos.map((todo) =>
-      todo.id === id ? { ...todo, isDone: !todo.isDone } : todo
-    );
-    setOldTodos(newTodos);
-    setTodos(newTodos);
-    try {
-      await AsyncStorage.setItem("my-todo", JSON.stringify(newTodos));
-    } catch (error) {
-      console.log("Error updating status:", error);
-    }
-  };
-
-  // Function to edit a todo
-  const editTodo = async (id: number) => {
-    if (editText.trim() === "") {
-      alert("Please enter todo content!");
-      return;
-    }
-    const newTodos = oldTodos.map((todo) =>
-      todo.id === id ? { ...todo, title: editText.trim() } : todo
-    );
-    setOldTodos(newTodos);
-    setTodos(newTodos);
-    try {
-      await AsyncStorage.setItem("my-todo", JSON.stringify(newTodos));
-    } catch (error) {
-      console.log("Error editing todo:", error);
-    }
-    // Reset editing state
-    setEditingId(null);
-    setEditText("");
-    Keyboard.dismiss();
-  };
-
-  // Function to start editing a todo
-  const startEdit = (id: number, currentTitle: string) => {
-    setEditingId(id);
-    setEditText(currentTitle);
-  };
-
-  // Function to cancel editing
-  const cancelEdit = () => {
-    setEditingId(null);
-    setEditText("");
-  };
-
-  // Function to search todos
-  const onSearch = (query: string) => {
-    if (query === "") {
-      setTodos(oldTodos); // Display all if not searching
-    } else {
-      const filteredTodos = oldTodos.filter((todo) =>
-        todo.title.toLowerCase().includes(query.toLowerCase())
+  const handleDone = useCallback(
+    async (id: number) => {
+      const updatedTodos = todos.map((todo) =>
+        todo.id === id ? { ...todo, isDone: !todo.isDone } : todo
       );
-      setTodos(filteredTodos);
-    }
-  };
+      updatedTodos.sort((a, b) => (a.isDone ? 1 : 0) - (b.isDone ? 1 : 0));
+      setTodos(updatedTodos);
+      await saveTodos(updatedTodos);
+    },
+    [todos, saveTodos]
+  );
 
-  // useEffect to call onSearch whenever searchQuery changes
-  useEffect(() => {
-    onSearch(searchQuery);
-  }, [searchQuery]);
+  const startEdit = useCallback((id: number, title: string) => {
+    setEditingId(id);
+    setEditText(title);
+  }, []);
+
+  const cancelEdit = useCallback(() => {
+    setEditingId(null);
+    setEditText("");
+  }, []);
+
+  const editTodo = useCallback(
+    async (id: number) => {
+      if (!editText.trim()) {
+        alert("Please enter todo content!");
+        return;
+      }
+      const updatedTodos = todos.map((todo) =>
+        todo.id === id ? { ...todo, title: editText.trim() } : todo
+      );
+      setTodos(updatedTodos);
+      await saveTodos(updatedTodos);
+      setEditingId(null);
+      setEditText("");
+      Keyboard.dismiss();
+    },
+    [editText, todos, saveTodos]
+  );
+
+  const filteredTodos = useMemo(() => {
+    let result = todos;
+    if (filter === "done") result = todos.filter((todo) => todo.isDone);
+    else if (filter === "undone") result = todos.filter((todo) => !todo.isDone);
+
+    if (searchQuery)
+      result = result.filter((todo) =>
+        todo.title.toLowerCase().includes(searchQuery.toLowerCase())
+      );
+
+    return result;
+  }, [todos, filter, searchQuery]);
 
   return (
-    <SafeAreaView style={styles.container}>
-      {/* Header with menu and avatar */}
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => alert("Menu clicked!")}>
-          <Ionicons name="menu" size={24} color={"#333"} />
-        </TouchableOpacity>
-        <TouchableOpacity onPress={() => alert("Avatar clicked!")}>
-          <Image
-            source={{ uri: "https://xsgames.co/randomusers/avatar.php?g=male" }}
-            style={{ width: 40, height: 40, borderRadius: 20 }}
+    <KeyboardAvoidingView
+      style={{ flex: 1 }}
+      behavior={Platform.OS === "ios" ? "padding" : undefined}
+    >
+      <SafeAreaView style={styles.container}>
+        {/* Header */}
+        <View style={styles.header}>
+          <TouchableOpacity onPress={() => alert("Menu clicked!")}>
+            <Ionicons name="menu" size={24} color="#333" />
+          </TouchableOpacity>
+          <TouchableOpacity onPress={() => alert("Avatar clicked!")}>
+            <Image
+              source={{ uri: "https://xsgames.co/randomusers/avatar.php?g=male" }}
+              style={styles.avatar}
+            />
+          </TouchableOpacity>
+        </View>
+
+        {/* Filter */}
+        <View style={styles.filterContainer}>
+          <Picker
+            selectedValue={filter}
+            onValueChange={(itemValue) => setFilter(itemValue)}
+            style={styles.picker}
+          >
+            <Picker.Item label="All" value="all" />
+            <Picker.Item label="Done" value="done" />
+            <Picker.Item label="Undone" value="undone" />
+          </Picker>
+        </View>
+
+        {/* Search */}
+        <View style={styles.searchBar}>
+          <Ionicons name="search" size={24} color="#333" />
+          <TextInput
+            placeholder="Search todo..."
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+            style={styles.searchInput}
+            clearButtonMode="always"
           />
-        </TouchableOpacity>
-      </View>
+        </View>
 
-      {/* Search bar */}
-      <View style={styles.searchBar}>
-        <Ionicons name="search" size={24} color={"#333"} />
-        <TextInput
-          placeholder="Search todo..."
-          value={searchQuery}
-          onChangeText={(text) => setSearchQuery(text)}
-          style={styles.searchInput}
-          clearButtonMode="always"
+        {/* Todo List */}
+        <FlatList
+          data={filteredTodos}
+          extraData={editingId}
+          keyExtractor={(item) => item.id.toString()}
+          keyboardShouldPersistTaps="handled"
+          removeClippedSubviews={false}
+          renderItem={({ item }) => (
+            <ToDoItem
+              todo={item}
+              onDelete={deleteTodo}
+              onToggleDone={handleDone}
+              editingId={editingId}
+              editText={editText}
+              onEditTextChange={setEditText}
+              onStartEdit={startEdit}
+              onEdit={editTodo}
+              onCancelEdit={cancelEdit}
+            />
+          )}
+          ListEmptyComponent={<Text style={styles.emptyText}>No todos!</Text>}
         />
-      </View>
 
-      {/* List of todos */}
-      <FlatList
-        data={[...todos].reverse()} // Reverse to display newest on top
-        keyExtractor={(item) => item.id.toString()}
-        renderItem={({ item }) => (
-          <ToDoItem
-            todo={item}
-            deleteTodo={deleteTodo}
-            handleDone={handleDone}
-            editingId={editingId}
-            editText={editText}
-            setEditText={setEditText}
-            startEdit={startEdit}
-            editTodo={editTodo}
-            cancelEdit={cancelEdit}
+        {/* Footer */}
+        <View style={styles.footer}>
+          <TextInput
+            placeholder="Add new todo..."
+            value={todoText}
+            onChangeText={setTodoText}
+            style={styles.newTodoInput}
+            autoCorrect={false}
+            onSubmitEditing={addTodo}
           />
-        )}
-        ListEmptyComponent={<Text style={styles.emptyText}>No todos!</Text>} // Display when list is empty
-      />
-
-      {/* Footer with input box and add button */}
-      <KeyboardAvoidingView
-        style={styles.footer}
-        behavior="padding"
-        keyboardVerticalOffset={10}
-      >
-        <TextInput
-          placeholder="Add new todo..."
-          value={todoText}
-          onChangeText={(text) => setTodoText(text)}
-          style={styles.newTodoInput}
-          autoCorrect={false}
-        />
-        <TouchableOpacity style={styles.addButton} onPress={addTodo}>
-          <Ionicons name="add" size={34} color={"#fff"} />
-        </TouchableOpacity>
-      </KeyboardAvoidingView>
-    </SafeAreaView>
+          <TouchableOpacity style={styles.addButton} onPress={addTodo}>
+            <Ionicons name="add" size={34} color="#fff" />
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+    </KeyboardAvoidingView>
   );
 }
 
-// Child component to render each todo item
+// TodoItem component
 const ToDoItem = ({
   todo,
-  deleteTodo,
-  handleDone,
+  onDelete,
+  onToggleDone,
   editingId,
   editText,
-  setEditText,
-  startEdit,
-  editTodo,
-  cancelEdit,
+  onEditTextChange,
+  onStartEdit,
+  onEdit,
+  onCancelEdit,
 }: {
   todo: ToDoType;
-  deleteTodo: (id: number) => void;
-  handleDone: (id: number) => void;
+  onDelete: (id: number) => void;
+  onToggleDone: (id: number) => void;
   editingId: number | null;
   editText: string;
-  setEditText: (text: string) => void;
-  startEdit: (id: number, title: string) => void;
-  editTodo: (id: number) => void;
-  cancelEdit: () => void;
+  onEditTextChange: (text: string) => void;
+  onStartEdit: (id: number, title: string) => void;
+  onEdit: (id: number) => void;
+  onCancelEdit: () => void;
 }) => {
   const isEditing = editingId === todo.id;
 
@@ -295,24 +252,19 @@ const ToDoItem = ({
       <View style={styles.todoInfoContainer}>
         <Checkbox
           value={todo.isDone}
-          onValueChange={() => handleDone(todo.id)}
-          color={todo.isDone ? "#4630EB" : "#ccc"} // Add default color when not done
+          onValueChange={() => onToggleDone(todo.id)}
+          color={todo.isDone ? "#4630EB" : "#ccc"}
         />
         {isEditing ? (
           <TextInput
             value={editText}
-            onChangeText={setEditText}
+            onChangeText={onEditTextChange}
             style={styles.editInput}
             autoFocus
-            onSubmitEditing={() => editTodo(todo.id)}
+            onSubmitEditing={() => onEdit(todo.id)}
           />
         ) : (
-          <Text
-            style={[
-              styles.todoText,
-              todo.isDone && { textDecorationLine: "line-through" },
-            ]}
-          >
+          <Text style={[styles.todoText, todo.isDone && styles.doneText]}>
             {todo.title}
           </Text>
         )}
@@ -320,20 +272,20 @@ const ToDoItem = ({
       <View style={styles.actionContainer}>
         {isEditing ? (
           <>
-            <TouchableOpacity onPress={() => editTodo(todo.id)}>
-              <Ionicons name="checkmark" size={24} color={"green"} />
+            <TouchableOpacity onPress={() => onEdit(todo.id)}>
+              <Ionicons name="checkmark" size={24} color="green" />
             </TouchableOpacity>
-            <TouchableOpacity onPress={cancelEdit}>
-              <Ionicons name="close" size={24} color={"red"} />
+            <TouchableOpacity onPress={onCancelEdit}>
+              <Ionicons name="close" size={24} color="red" />
             </TouchableOpacity>
           </>
         ) : (
           <>
-            <TouchableOpacity onPress={() => startEdit(todo.id, todo.title)}>
-              <Ionicons name="pencil" size={24} color={"blue"} />
+            <TouchableOpacity onPress={() => onStartEdit(todo.id, todo.title)}>
+              <Ionicons name="pencil" size={24} color="blue" />
             </TouchableOpacity>
-            <TouchableOpacity onPress={() => deleteTodo(todo.id)}>
-              <Ionicons name="trash" size={24} color={"red"} />
+            <TouchableOpacity onPress={() => onDelete(todo.id)}>
+              <Ionicons name="trash" size={24} color="red" />
             </TouchableOpacity>
           </>
         )}
@@ -342,87 +294,23 @@ const ToDoItem = ({
   );
 };
 
-// Styles for the interface
+// Styles (giữ nguyên)
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    paddingHorizontal: 20,
-    backgroundColor: "#f5f5f5",
-  },
-  header: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 20,
-  },
-  searchBar: {
-    flexDirection: "row",
-    backgroundColor: "#fff",
-    alignItems: "center",
-    paddingHorizontal: 16,
-    paddingVertical: Platform.OS === "ios" ? 16 : 8,
-    borderRadius: 10,
-    gap: 10,
-    marginBottom: 20,
-  },
-  searchInput: {
-    flex: 1,
-    fontSize: 16,
-    color: "#333",
-  },
-  todoContainer: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    backgroundColor: "#fff",
-    padding: 16,
-    borderRadius: 10,
-    marginBottom: 20,
-  },
-  todoInfoContainer: {
-    flexDirection: "row",
-    gap: 10,
-    alignItems: "center",
-    flex: 1,
-  },
-  todoText: {
-    fontSize: 16,
-    color: "#333",
-  },
-  editInput: {
-    flex: 1,
-    fontSize: 16,
-    color: "#333",
-    borderBottomWidth: 1,
-    borderBottomColor: "#4630EB",
-  },
-  actionContainer: {
-    flexDirection: "row",
-    gap: 10,
-  },
-  footer: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    bottom: 20,
-  },
-  newTodoInput: {
-    flex: 1,
-    backgroundColor: "#fff",
-    padding: 16,
-    borderRadius: 10,
-    fontSize: 16,
-    color: "#333",
-  },
-  addButton: {
-    backgroundColor: "#4630EB",
-    padding: 8,
-    borderRadius: 10,
-    marginLeft: 20,
-  },
-  emptyText: {
-    textAlign: "center",
-    fontSize: 16,
-    color: "#999",
-    marginTop: 20,
-  },
+  container: { flex: 1, paddingHorizontal: 20, backgroundColor: "#f5f5f5" },
+  header: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 20 },
+  avatar: { width: 40, height: 40, borderRadius: 20 },
+  filterContainer: { backgroundColor: "#fff", borderRadius: 10, marginBottom: 20 },
+  picker: { height: 50, width: "100%" },
+  searchBar: { flexDirection: "row", backgroundColor: "#fff", alignItems: "center", paddingHorizontal: 16, paddingVertical: Platform.OS === "ios" ? 16 : 8, borderRadius: 10, gap: 10, marginBottom: 20 },
+  searchInput: { flex: 1, fontSize: 16, color: "#333" },
+  todoContainer: { flexDirection: "row", justifyContent: "space-between", backgroundColor: "#fff", padding: 16, borderRadius: 10, marginBottom: 20 },
+  todoInfoContainer: { flexDirection: "row", gap: 10, alignItems: "center", flex: 1 },
+  todoText: { fontSize: 16, color: "#333" },
+  doneText: { textDecorationLine: "line-through" },
+  editInput: { flex: 1, fontSize: 16, color: "#333", borderBottomWidth: 1, borderBottomColor: "#4630EB" },
+  actionContainer: { flexDirection: "row", gap: 10 },
+  footer: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 20 },
+  newTodoInput: { flex: 1, backgroundColor: "#fff", padding: 16, borderRadius: 10, fontSize: 16, color: "#333" },
+  addButton: { backgroundColor: "#4630EB", padding: 8, borderRadius: 10, marginLeft: 20 },
+  emptyText: { textAlign: "center", fontSize: 16, color: "#999", marginTop: 20 },
 });
