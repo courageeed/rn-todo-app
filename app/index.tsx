@@ -16,7 +16,7 @@ import { Checkbox } from "expo-checkbox";
 import { useEffect, useState } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
-// Định nghĩa kiểu dữ liệu cho một todo item
+// Define the data type for a todo item
 type ToDoType = {
   id: number;
   title: string;
@@ -24,7 +24,7 @@ type ToDoType = {
 };
 
 export default function Index() {
-  // Dữ liệu mẫu (không dùng trực tiếp, chỉ để tham khảo)
+  // Sample data (not used directly, just for reference)
   const todoData = [
     {
       id: 1,
@@ -58,16 +58,16 @@ export default function Index() {
     },
   ];
 
-  // State để quản lý danh sách todos hiển thị
+  // State to manage the list of displayed todos
   const [todos, setTodos] = useState<ToDoType[]>([]);
-  // State cho văn bản nhập vào khi thêm todo
+  // State for the text input when adding a todo
   const [todoText, setTodoText] = useState<string>("");
-  // State cho query tìm kiếm
+  // State for the search query
   const [searchQuery, setSearchQuery] = useState<string>("");
-  // State cho danh sách todos gốc (để khôi phục khi tìm kiếm)
+  // State for the original list of todos (to restore when searching)
   const [oldTodos, setOldTodos] = useState<ToDoType[]>([]);
 
-  // useEffect để tải dữ liệu từ AsyncStorage khi component mount
+  // useEffect to load data from AsyncStorage when component mounts
   useEffect(() => {
     const getTodos = async () => {
       try {
@@ -78,58 +78,58 @@ export default function Index() {
           setOldTodos(parsedTodos);
         }
       } catch (error) {
-        console.log("Lỗi khi tải todos:", error);
+        console.log("Error loading todos:", error);
       }
     };
     getTodos();
   }, []);
 
-  // Hàm thêm todo mới
+  // Function to add a new todo
   const addTodo = async () => {
-    // Kiểm tra nếu văn bản rỗng, không thêm
+    // Check if text is empty, do not add
     if (todoText.trim() === "") {
-      alert("Vui lòng nhập nội dung todo!");
+      alert("Please enter todo content!");
       return;
     }
 
-    // Tạo todo mới với ID duy nhất (dùng Date.now() thay Math.random() để tránh trùng lặp)
+    // Create a new todo with a unique ID (use Date.now() instead of Math.random() to avoid duplicates)
     const newTodo: ToDoType = {
-      id: Date.now(), // ID dựa trên timestamp, đảm bảo duy nhất
+      id: Date.now(), // ID based on timestamp, ensures uniqueness
       title: todoText.trim(),
       isDone: false,
     };
 
-    // Cập nhật danh sách
+    // Update the list
     const newTodos = [...oldTodos, newTodo];
     setOldTodos(newTodos);
     setTodos(newTodos);
 
-    // Lưu vào AsyncStorage
+    // Save to AsyncStorage
     try {
       await AsyncStorage.setItem("my-todo", JSON.stringify(newTodos));
     } catch (error) {
-      console.log("Lỗi khi lưu todo:", error);
+      console.log("Error saving todo:", error);
     }
 
-    // Reset input và ẩn bàn phím
+    // Reset input and hide keyboard
     setTodoText("");
     Keyboard.dismiss();
   };
 
-  // Hàm xóa todo theo ID
+  // Function to delete todo by ID
   const deleteTodo = async (id: number) => {
     try {
       const newTodos = oldTodos.filter((todo) => todo.id !== id);
       setOldTodos(newTodos);
-      setTodos(newTodos); // Cập nhật danh sách hiển thị
+      setTodos(newTodos); // Update the displayed list
       await AsyncStorage.setItem("my-todo", JSON.stringify(newTodos));
-      alert("Đã xóa todo!");
+      alert("Todo deleted!");
     } catch (error) {
-      console.log("Lỗi khi xóa todo:", error);
+      console.log("Error deleting todo:", error);
     }
   };
 
-  // Hàm đánh dấu hoàn thành/chưa hoàn thành
+  // Function to mark as done/not done
   const handleDone = async (id: number) => {
     const newTodos = oldTodos.map((todo) =>
       todo.id === id ? { ...todo, isDone: !todo.isDone } : todo
@@ -139,14 +139,14 @@ export default function Index() {
     try {
       await AsyncStorage.setItem("my-todo", JSON.stringify(newTodos));
     } catch (error) {
-      console.log("Lỗi khi cập nhật trạng thái:", error);
+      console.log("Error updating status:", error);
     }
   };
 
-  // Hàm tìm kiếm todos
+  // Function to search todos
   const onSearch = (query: string) => {
     if (query === "") {
-      setTodos(oldTodos); // Hiển thị tất cả nếu không tìm kiếm
+      setTodos(oldTodos); // Display all if not searching
     } else {
       const filteredTodos = oldTodos.filter((todo) =>
         todo.title.toLowerCase().includes(query.toLowerCase())
@@ -155,14 +155,14 @@ export default function Index() {
     }
   };
 
-  // useEffect để gọi onSearch mỗi khi searchQuery thay đổi
+  // useEffect to call onSearch whenever searchQuery changes
   useEffect(() => {
     onSearch(searchQuery);
   }, [searchQuery]);
 
   return (
     <SafeAreaView style={styles.container}>
-      {/* Header với menu và avatar */}
+      {/* Header with menu and avatar */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => alert("Menu clicked!")}>
           <Ionicons name="menu" size={24} color={"#333"} />
@@ -175,11 +175,11 @@ export default function Index() {
         </TouchableOpacity>
       </View>
 
-      {/* Ô tìm kiếm */}
+      {/* Search bar */}
       <View style={styles.searchBar}>
         <Ionicons name="search" size={24} color={"#333"} />
         <TextInput
-          placeholder="Tìm kiếm todo..."
+          placeholder="Search todo..."
           value={searchQuery}
           onChangeText={(text) => setSearchQuery(text)}
           style={styles.searchInput}
@@ -187,9 +187,9 @@ export default function Index() {
         />
       </View>
 
-      {/* Danh sách todos */}
+      {/* List of todos */}
       <FlatList
-        data={[...todos].reverse()} // Đảo ngược để hiển thị mới nhất lên trên
+        data={[...todos].reverse()} // Reverse to display newest on top
         keyExtractor={(item) => item.id.toString()}
         renderItem={({ item }) => (
           <ToDoItem
@@ -198,17 +198,17 @@ export default function Index() {
             handleDone={handleDone}
           />
         )}
-        ListEmptyComponent={<Text style={styles.emptyText}>Không có todo nào!</Text>} // Hiển thị khi danh sách rỗng
+        ListEmptyComponent={<Text style={styles.emptyText}>No todos!</Text>} // Display when list is empty
       />
 
-      {/* Footer với ô nhập và nút thêm */}
+      {/* Footer with input box and add button */}
       <KeyboardAvoidingView
         style={styles.footer}
         behavior="padding"
         keyboardVerticalOffset={10}
       >
         <TextInput
-          placeholder="Thêm todo mới..."
+          placeholder="Add new todo..."
           value={todoText}
           onChangeText={(text) => setTodoText(text)}
           style={styles.newTodoInput}
@@ -222,7 +222,7 @@ export default function Index() {
   );
 }
 
-// Component con để render từng todo item
+// Child component to render each todo item
 const ToDoItem = ({
   todo,
   deleteTodo,
@@ -237,7 +237,7 @@ const ToDoItem = ({
       <Checkbox
         value={todo.isDone}
         onValueChange={() => handleDone(todo.id)}
-        color={todo.isDone ? "#4630EB" : "#ccc"} // Thêm màu mặc định khi chưa done
+        color={todo.isDone ? "#4630EB" : "#ccc"} // Add default color when not done
       />
       <Text
         style={[
@@ -254,7 +254,7 @@ const ToDoItem = ({
   </View>
 );
 
-// Styles cho giao diện
+// Styles for the interface
 const styles = StyleSheet.create({
   container: {
     flex: 1,
