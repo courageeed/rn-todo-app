@@ -66,6 +66,10 @@ export default function Index() {
   const [searchQuery, setSearchQuery] = useState<string>("");
   // State for the original list of todos (to restore when searching)
   const [oldTodos, setOldTodos] = useState<ToDoType[]>([]);
+  // State for editing: ID of the todo being edited
+  const [editingId, setEditingId] = useState<number | null>(null);
+  // State for the edit text
+  const [editText, setEditText] = useState<string>("");
 
   // useEffect to load data from AsyncStorage when component mounts
   useEffect(() => {
@@ -143,6 +147,40 @@ export default function Index() {
     }
   };
 
+  // Function to edit a todo
+  const editTodo = async (id: number) => {
+    if (editText.trim() === "") {
+      alert("Please enter todo content!");
+      return;
+    }
+    const newTodos = oldTodos.map((todo) =>
+      todo.id === id ? { ...todo, title: editText.trim() } : todo
+    );
+    setOldTodos(newTodos);
+    setTodos(newTodos);
+    try {
+      await AsyncStorage.setItem("my-todo", JSON.stringify(newTodos));
+    } catch (error) {
+      console.log("Error editing todo:", error);
+    }
+    // Reset editing state
+    setEditingId(null);
+    setEditText("");
+    Keyboard.dismiss();
+  };
+
+  // Function to start editing a todo
+  const startEdit = (id: number, currentTitle: string) => {
+    setEditingId(id);
+    setEditText(currentTitle);
+  };
+
+  // Function to cancel editing
+  const cancelEdit = () => {
+    setEditingId(null);
+    setEditText("");
+  };
+
   // Function to search todos
   const onSearch = (query: string) => {
     if (query === "") {
@@ -196,6 +234,12 @@ export default function Index() {
             todo={item}
             deleteTodo={deleteTodo}
             handleDone={handleDone}
+            editingId={editingId}
+            editText={editText}
+            setEditText={setEditText}
+            startEdit={startEdit}
+            editTodo={editTodo}
+            cancelEdit={cancelEdit}
           />
         )}
         ListEmptyComponent={<Text style={styles.emptyText}>No todos!</Text>} // Display when list is empty
@@ -227,32 +271,76 @@ const ToDoItem = ({
   todo,
   deleteTodo,
   handleDone,
+  editingId,
+  editText,
+  setEditText,
+  startEdit,
+  editTodo,
+  cancelEdit,
 }: {
   todo: ToDoType;
   deleteTodo: (id: number) => void;
   handleDone: (id: number) => void;
-}) => (
-  <View style={styles.todoContainer}>
-    <View style={styles.todoInfoContainer}>
-      <Checkbox
-        value={todo.isDone}
-        onValueChange={() => handleDone(todo.id)}
-        color={todo.isDone ? "#4630EB" : "#ccc"} // Add default color when not done
-      />
-      <Text
-        style={[
-          styles.todoText,
-          todo.isDone && { textDecorationLine: "line-through" },
-        ]}
-      >
-        {todo.title}
-      </Text>
+  editingId: number | null;
+  editText: string;
+  setEditText: (text: string) => void;
+  startEdit: (id: number, title: string) => void;
+  editTodo: (id: number) => void;
+  cancelEdit: () => void;
+}) => {
+  const isEditing = editingId === todo.id;
+
+  return (
+    <View style={styles.todoContainer}>
+      <View style={styles.todoInfoContainer}>
+        <Checkbox
+          value={todo.isDone}
+          onValueChange={() => handleDone(todo.id)}
+          color={todo.isDone ? "#4630EB" : "#ccc"} // Add default color when not done
+        />
+        {isEditing ? (
+          <TextInput
+            value={editText}
+            onChangeText={setEditText}
+            style={styles.editInput}
+            autoFocus
+            onSubmitEditing={() => editTodo(todo.id)}
+          />
+        ) : (
+          <Text
+            style={[
+              styles.todoText,
+              todo.isDone && { textDecorationLine: "line-through" },
+            ]}
+          >
+            {todo.title}
+          </Text>
+        )}
+      </View>
+      <View style={styles.actionContainer}>
+        {isEditing ? (
+          <>
+            <TouchableOpacity onPress={() => editTodo(todo.id)}>
+              <Ionicons name="checkmark" size={24} color={"green"} />
+            </TouchableOpacity>
+            <TouchableOpacity onPress={cancelEdit}>
+              <Ionicons name="close" size={24} color={"red"} />
+            </TouchableOpacity>
+          </>
+        ) : (
+          <>
+            <TouchableOpacity onPress={() => startEdit(todo.id, todo.title)}>
+              <Ionicons name="pencil" size={24} color={"blue"} />
+            </TouchableOpacity>
+            <TouchableOpacity onPress={() => deleteTodo(todo.id)}>
+              <Ionicons name="trash" size={24} color={"red"} />
+            </TouchableOpacity>
+          </>
+        )}
+      </View>
     </View>
-    <TouchableOpacity onPress={() => deleteTodo(todo.id)}>
-      <Ionicons name="trash" size={24} color={"red"} />
-    </TouchableOpacity>
-  </View>
-);
+  );
+};
 
 // Styles for the interface
 const styles = StyleSheet.create({
@@ -294,10 +382,22 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     gap: 10,
     alignItems: "center",
+    flex: 1,
   },
   todoText: {
     fontSize: 16,
     color: "#333",
+  },
+  editInput: {
+    flex: 1,
+    fontSize: 16,
+    color: "#333",
+    borderBottomWidth: 1,
+    borderBottomColor: "#4630EB",
+  },
+  actionContainer: {
+    flexDirection: "row",
+    gap: 10,
   },
   footer: {
     flexDirection: "row",
